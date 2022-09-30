@@ -5,82 +5,184 @@ Created on Wed Sep 28 20:39:04 2022
 
 @author: ChaoruiWang
 """
-import numpy as np               # import numpy package
-import matplotlib.pyplot as plt  # to plot
+import numpy as np
+import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
 
 
-def ode1_rhs(x, y, alpha, beta):
-    return alpha*x - beta*x*y
+'''
+The following function gives the right hand side of Lotke-Volterra in np.ndarray type
+inputs:
+    y: 2d vector
+    alpha: real number
+    beta: real number
+    delta: real number
+    gamma: real number
+    
+outputs:
+    2d numpy array
+'''
+def lotke_volterra_rhs(y, alpha, beta, delta, gamma):
+    return np.array([
+                    alpha * y[0] - beta * y[0] * y[1], 
+                    delta * y[0] * y[1] - gamma * y[1]   
+                    ])
 
-def ode2_rhs(x, y, gamma, delta):
-    return delta*x*y - gamma*y
 
-def lv_odes_euler(T, N, x_init, y_init, alpha, beta, gamma, delta):
+'''
+The following function constructs the forward Euler method for ODEs
+inputs:
+    rhs_fun: function, describes RHS of ODEs, outputs 2d array
+    T: positive real number, ending time
+    N: positive integer, step numbers
+    y0: 2d real vector, initial value
+    alpha: real number
+    beta: real number
+    delta: real number
+    gamma: real number
+    
+outputs:
+    3d tuple
+    y: 2d vector, approximate solution at time T
+    x_traj: trajectory of first element of y along discretized time steps
+    y_traj: trajectory of second element of y along discretized time steps
+'''
+def euler(rhs_fun, T, N, y0, alpha, beta, delta, gamma):
+    if T <= 0:
+        raise ValueError('Final time T should be positive.')
+        
+    if N<= 0:
+        raise ValueError('N should be a positive integer.')
+        
+    try:
+        if N == int(N):
+            N = int(N)
+    except TypeError:
+        print('N should be an integer.')
+        
+    # compute Delta t
     dt = T/N
-    x_traj = [x_init]
-    y_traj = [y_init]
-    x = x_init
-    y = y_init    
+    
+    x_traj = [y0[0]]
+    y_traj = [y0[1]]
+    
+    # force y0 to float array
+    y = np.array(y0) + np.zeros(2)
+    
     for i in range(N):
-        x += dt*ode1_rhs(x, y, alpha, beta)
-        y += dt*ode2_rhs(x, y, gamma, delta) 
-        x_traj.append(x)
-        y_traj.append(y)
-    return (x, y, x_traj, y_traj)
+        # use forward euler formula to update y at each timestep
+        y += dt * rhs_fun(y, alpha, beta, delta, gamma)
+        x_traj.append(y[0])
+        y_traj.append(y[1])
+    return (y, x_traj, y_traj)
 
-sol_euler = lv_odes_euler(1.0, 1000, 10, 20, 0.1, 0.1, 0.1, 0.1)
-print(sol_euler[0],sol_euler[1])
+
+'''
+We use our euler function to solve the following ivp of Lotke-Volterra, where
+T =1.0, N =1000, initial value = [10,20], all coefficients = 0.1
+'''
+sol_euler = euler(lotke_volterra_rhs, 1.0, 1000, [10,20], 0.1, 0.1, 0.1, 0.1)
+print('----------------------------------------------------------------------')
+print('Euler method solution:', sol_euler[0])
  
-# plotting solution x,y on the time interval
+
+# plotting the euler method solution along the time steps
 t = np.linspace(0,1,1001)
-plt.plot(t, sol_euler[2], label='x')
-plt.plot(t, sol_euler[3], label='y')
+plt.title('Euler')
+plt.plot(t, sol_euler[1], label='x')
+plt.plot(t, sol_euler[2], label='y')
 plt.ylim([0,30])
 plt.legend()
 plt.show()
 
 
-# Runge Kutta
-def lv_odes_RK4():
+
+'''
+Following function construct the two-step Adams-Bashforth method
+inputs:
+    rhs_fun: function, describes RHS of ODEs, outputs 2d array
+    T: positive real number, ending time
+    N: integer greater than 1, step numbers
+    y0: 2d real vector, initial value
+    alpha: real number
+    beta: real number
+    delta: real number
+    gamma: real number
     
-    return
-
-
-# linear multistep two-step Adams–Bashforth
-def Llvodes_lin_multi(T, N, x_init, y_init, alpha, beta, gamma, delta):
-    if N <= 1:
-        raise ValueError('The step number should be bigger or equal than 2.')
+outputs:
+    3d tuple
+    y_2: 2d vector, approximate solution at time T
+    x_traj: trajectory of first element of y along discretized time steps
+    y_traj: trajectory of second element of y along discretized time steps
+'''
+def lin_2step(rhs_fun, T, N, y0, alpha, beta, gamma, delta):
+    if T <= 0:
+        raise ValueError('Final time T should be positive.')
+        
+    if N<= 1:
+        raise ValueError('N should be an integer greater than 1.')
+        
+    try:
+        if N == int(N):
+            N = int(N)
+    except TypeError:
+        print('N should be an integer.')
+        
     dt = T/N
-    x0 = x_init
-    y0 = y_init
-    x1 = x0 + dt*ode1_rhs(x0, y0, alpha, beta)
-    y1 = y0 + dt*ode2_rhs(x0, y0, gamma, delta)
-    x_traj = [x_init, x_firststep]
-    y_traj = [y_init, y_firststep]
-    x = x_init
-    x_firststep += dt*ode1_rhs(x, y, alpha, beta)
-    y = y_init
-    y_firststep = dt*ode2_rhs(x, y, gamma, delta)
+    y_0 = np.array(y0) + np.zeros(2)
+    
+    # just use Euler to create a necessary first step 
+    y_1 = y_0 + dt * rhs_fun(y_0, alpha, beta, gamma, delta)
+    x_traj = [y_0[0], y_1[0]]
+    y_traj = [y_0[1], y_1[1]]
     for i in range(N-1):
-        x2 = x1 + 3/2*dt*ode1_rhs(x1, y1, alpha, beta) - 1/2*ode1_rhs(x0, y0, alpha, beta)
-        y2 = y1 + 3/2*dt*ode2_rhs(x1, y1, gamma, delta) - 1/2*ode2_rhs(x0, y0, gamma, delta)
-        x1 = x2
-        y1 = y2
-    return
+        y_2 = y_1 + 3/2 * dt * rhs_fun(y_1, alpha, beta, gamma, delta) - 1/2 * dt * rhs_fun(y_0, alpha, beta, gamma, delta)
+        x_traj.append(y_2[0])
+        y_traj.append(y_2[1])
+        y_0 = y_1
+        y_1 = y_2
+    return (y_2, x_traj, y_traj)
 
 
-# testing
-sol_test = lv_odes_euler(1.0, 1000, 1, 0, -1.0, 0, 0, 0)
-print(np.exp(-1))
-print(sol_test[0])
-plt.plot(t,sol_test[2])
+'''
+Try the same problem as the Euler method, with all same parameters.
+'''
+sol_lin_2step = lin_2step(lotke_volterra_rhs, 1.0, 1000, [10,20], 0.1, 0.1, 0.1, 0.1)
+print('----------------------------------------------------------------------')
+print('Linear two-step solution:', sol_lin_2step[0])
+
+
+plt.title('Linear Two-Step')
+plt.plot(t, sol_lin_2step[1], label='x')
+plt.plot(t, sol_lin_2step[2], label='y')
+plt.ylim([0,30])
+plt.legend()
 plt.show()
 
 
+'''
+Let's do a test using dz/dt = -z. 
+The exact solution should be e^-1, with T = 1.0, initial value = 1.0.
+'''
+sol_euler_test = euler(lambda y,alpha,beta,delta,gamma : -y, 1.0, 1000, [1, 0], -1.0, 0, 0, 0)
+print('--------------------------------test-----------------------------------')
+print('Exact solution:', np.exp(-1))
+print('Solution by Euler:', sol_euler_test[0][0])
+plt.title('Euler for dz/dt=-z')
+plt.plot(t,sol_euler_test[1])
+plt.legend()
+plt.show()
 
 
-# use existing library introduced in the lecture
+'''
+Let's do a test using simple harmonic oscillator. 
+The exact solution should be
+'''
+sol_harmo_osci = euler(lambda y,alpha,beta,delta,gamma : -y, 1.0, 1000, 1, 0, 1, 0 , -0.1)
+print(np.cos)
+
+
+# use existing library introduced in the lecture, in particular the 'solve_ivp' function
 def lv_rhs(t, y, alpha, beta, gamma, delta):
     return np.array([
                      alpha*y[0] - beta*y[0]*y[1],
